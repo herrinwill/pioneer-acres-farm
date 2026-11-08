@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pioneer Acres</title>
+<style>
+  :root{
+    --ink:#2a2016; --parch:#efe7d2; --gold:#d69e48; --green:#5a7b56; --greenlo:#1f3d2d;
+    --panel:rgba(32,24,14,.82); --panel2:rgba(46,36,22,.9); --line:rgba(214,158,72,.5);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:#1b140c;color:var(--parch);
+    font-family:"Georgia","Iowan Old Style",serif;overflow:hidden;}
+  button{font-family:inherit;cursor:pointer}
+  #game{position:fixed;inset:0;overflow:hidden}
+  .screen{position:absolute;inset:0;display:none}
+  .screen.active{display:block}
+  .bg{position:absolute;inset:0;width:100%;height:100%;background-size:cover;background-position:center}
+  /* ---- landing & map: art is baked, UI invisible over it (v6 pattern) ---- */
+  .hit{position:absolute;opacity:0;border:0;background:transparent}
+  #landing .bg{background-image:url("assets/bg/landing.png")}
+  #map .bg{background-image:url("assets/bg/frontier-map.png")}
+  /* ---- intro ---- */
+  #intro{background:#120d07}
+  #intro .bg{background-image:url("assets/bg/valley.png");filter:brightness(.6)}
+  .introcard{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+    width:min(720px,86vw);background:var(--panel);border:2px solid var(--line);
+    border-radius:16px;padding:34px 40px;text-align:center}
+  .introcard h1{margin:.1em 0 .3em;font-size:34px;color:var(--gold)}
+  .introcard p{font-size:19px;line-height:1.55;color:#eadfc6}
+  .btn{background:var(--gold);color:#2a1e0c;border:0;border-radius:10px;
+    padding:12px 26px;font-size:18px;font-weight:bold;margin-top:18px}
+  .btn.ghost{background:transparent;color:var(--gold);border:2px solid var(--line)}
+  .dots{margin-top:14px}.dots i{display:inline-block;width:9px;height:9px;border-radius:50%;
+    background:#6b5736;margin:0 4px}.dots i.on{background:var(--gold)}
+  /* ---- farm ---- */
+  #farm .bg{background-image:url("assets/bg/raw-acre.png")}
+  #board{position:absolute;inset:0}
+  .farm-asset{position:absolute;width:74px;height:74px;transform:translate(-50%,-85%);
+    filter:drop-shadow(0 6px 4px rgba(0,0,0,.4));pointer-events:none;image-rendering:auto}
+  .hot{position:absolute;width:52px;height:52px;border-radius:50%;transform:translate(-50%,-50%);
+    border:2px dashed rgba(255,245,220,.7);background:rgba(90,123,86,.35);
+    display:flex;align-items:center;justify-content:center;font-size:20px;color:#fff;z-index:4}
+  .hot.done{border-style:solid;background:rgba(80,140,90,.55)}
+  .star{position:absolute;left:50%;top:44%;transform:translate(-50%,-50%);z-index:6;
+    width:120px;height:120px;border-radius:50%;border:3px solid var(--gold);
+    background:radial-gradient(circle,rgba(214,158,72,.9),rgba(140,95,30,.75));
+    color:#2a1e0c;font-weight:bold;font-size:17px;display:flex;align-items:center;justify-content:center;text-align:center}
+  .star.hidden{display:none}
+  /* HUD */
+  #hud{position:absolute;top:10px;left:10px;right:10px;display:flex;gap:8px;flex-wrap:wrap;
+    align-items:center;z-index:10}
+  .pill{background:var(--panel);border:1px solid var(--line);border-radius:999px;
+    padding:6px 13px;font-size:14px;display:flex;gap:6px;align-items:center}
+  .pill b{color:var(--gold)}
+  #levelpill{background:var(--panel2);font-weight:bold}
+  #weatherpill{min-width:118px}
+  .spacer{flex:1}
+  /* toolrail */
+  #toolrail{position:absolute;left:10px;top:70px;display:flex;flex-direction:column;gap:7px;z-index:10}
+  .tool{width:62px;height:58px;border-radius:12px;border:1px solid var(--line);
+    background:var(--panel);color:var(--parch);font-size:12px;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:3px}
+  .tool .ic{font-size:21px}
+  .tool.sel{background:var(--gold);color:#2a1e0c;border-color:#fff}
+  /* build menu */
+  #buildmenu{position:absolute;left:84px;top:70px;width:230px;max-height:72vh;overflow:auto;
+    background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:10px;z-index:10;display:none}
+  #buildmenu.open{display:block}
+  #buildmenu h3{margin:2px 0 8px;color:var(--gold);font-size:15px;text-transform:capitalize}
+  .item{display:flex;gap:9px;align-items:center;padding:7px;border-radius:10px;
+    border:1px solid transparent;margin-bottom:5px;background:rgba(255,255,255,.03)}
+  .item img{width:38px;height:38px}
+  .item .nm{font-size:14px}.item .co{font-size:11px;color:#c9b88f}
+  .item button{margin-left:auto;background:var(--green);color:#fff;border:0;border-radius:8px;padding:6px 10px;font-size:12px}
+  .item.locked{opacity:.45}
+  .item.locked button{background:#555;cursor:not-allowed}
+  /* missions */
+  #missions{position:absolute;right:10px;top:70px;width:236px;background:var(--panel);
+    border:1px solid var(--line);border-radius:14px;padding:12px;z-index:10;max-height:52vh;overflow:auto}
+  #missions h3{margin:0 0 8px;color:var(--gold);font-size:15px}
+  .mz{font-size:13.5px;line-height:1.5;padding:3px 0;color:#d8cba9}
+  .mz.done{color:#8fd49a;text-decoration:line-through;opacity:.85}
+  .mz b{color:#8fd49a}
+  /* bottom bar */
+  #bottom{position:absolute;right:10px;bottom:12px;display:flex;gap:9px;z-index:10}
+  #logline{position:absolute;left:14px;bottom:16px;max-width:46vw;font-size:13.5px;color:#e7dcc0;
+    background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 12px;z-index:10}
+  /* modal */
+  #modal{position:absolute;inset:0;background:rgba(10,7,3,.72);z-index:30;display:none;
+    align-items:center;justify-content:center}
+  #modal.open{display:flex}
+  .mcard{width:min(560px,90vw);background:var(--panel2);border:2px solid var(--line);
+    border-radius:16px;padding:22px}
+  .mcard h2{margin:0 0 4px;color:var(--gold)}
+  .proj{margin:12px 0;padding:10px;border:1px solid var(--line);border-radius:10px}
+  .proj .top{display:flex;justify-content:space-between;align-items:center}
+  .bar{height:12px;background:#2c2416;border-radius:6px;overflow:hidden;margin:7px 0}
+  .bar i{display:block;height:100%;background:linear-gradient(90deg,var(--green),var(--gold))}
+  .proj button{background:var(--green);color:#fff;border:0;border-radius:8px;padding:6px 12px;font-size:13px}
+  .proj.done button{background:#444}
+  /* inspect popover */
+  #inspect{position:absolute;z-index:20;width:210px;background:var(--panel2);
+    border:1px solid var(--line);border-radius:12px;padding:12px;font-size:13px;display:none}
+  #inspect.open{display:block}
+  #inspect h4{margin:0 0 5px;color:var(--gold)}
+  /* autotest box */
+  #patest{position:absolute;left:10px;bottom:10px;z-index:99;padding:8px 14px;border-radius:8px;
+    font-family:monospace;font-weight:bold;display:none}
+  #patest.pass{display:block;background:#1d6b2f;color:#fff}
+  #patest.fail{display:block;background:#8a2020;color:#fff}
+</style>
+</head>
+<body>
+<div id="game">
+
+  <section class="screen" id="landing">
+    <div class="bg"></div>
+    <button class="hit" id="startHit" style="left:calc(50% - 150px);top:520px;width:300px;height:80px"></button>
+  </section>
+
+  <section class="screen" id="intro">
+    <div class="bg"></div>
+    <div class="introcard">
+      <h1 id="introTitle"></h1>
+      <p id="introBody"></p>
+      <div class="dots" id="introDots"></div>
+      <div>
+        <button class="btn ghost" id="introSkip">Skip</button>
+        <button class="btn" id="introNext">Next</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="screen" id="map">
+    <div class="bg"></div>
+    <button class="hit parcel" data-parcel="East Meadow" style="left:140px;top:300px;width:280px;height:220px"></button>
+    <button class="hit parcel" data-parcel="River Bend" style="left:500px;top:300px;width:280px;height:220px"></button>
+    <button class="hit parcel" data-parcel="High Valley" style="left:860px;top:300px;width:280px;height:220px"></button>
+  </section>
+
+  <section class="screen" id="farm">
+    <div class="bg"></div>
+    <div id="board"></div>
+    <button class="star" id="workStar">Work<br>Land</button>
+
+    <div id="hud">
+      <div class="pill" id="levelpill">Lv<b id="hLevel">1</b> <span id="hLevelName">Settler</span></div>
+      <div class="pill">Day <b id="hDay">1</b></div>
+      <div class="pill" id="weatherpill">Weather: <b id="hWeather">Clear</b></div>
+      <div class="spacer"></div>
+      <div class="pill">💧<b id="hWater">60</b></div>
+      <div class="pill">🌾<b id="hFood">50</b></div>
+      <div class="pill">⚡<b id="hEnergy">40</b></div>
+      <div class="pill">🪵<b id="hMat">30</b></div>
+      <div class="pill">🪙<b id="hCoins">20</b></div>
+      <div class="pill">🤝<b id="hComm">0</b></div>
+    </div>
+
+    <div id="toolrail"></div>
+    <div id="buildmenu"><h3 id="buildTitle">Build</h3><div id="buildList"></div></div>
+
+    <div id="missions"><h3>Homestead Plan</h3><div id="missionList"></div></div>
+
+    <div id="inspect"><h4 id="inspTitle"></h4><div id="inspBody"></div></div>
+
+    <div id="logline">Click the <b>Work Land</b> star to begin your survey.</div>
+    <div id="bottom">
+      <button class="btn ghost" id="communityBtn" style="display:none">Community</button>
+      <button class="btn" id="endDayBtn">End Day ▸</button>
+    </div>
+
+    <div id="modal">
+      <div class="mcard">
+        <h2>Community Projects</h2>
+        <p style="margin:.2em 0 0;color:#d8cba9">Your homestead is stable. Spend surplus to raise the region.</p>
+        <div id="projList"></div>
+        <div style="text-align:right"><button class="btn" id="closeModal">Close</button></div>
+      </div>
+    </div>
+
+    <div id="patest"></div>
+  </section>
+
+</div>
+
+<script>
+"use strict";
+var PioneerAcres = (function(){
+  // ---------- constants ----------
+  var MAXR = { water:100, food:100, energy:100 };
+  var WEATHERS = ["Clear","Drought","Storm","Cloudy","ColdSnap","HighWind","HeatWave"];
+  var WEATHER_WEIGHT = { Clear:5, Drought:2, Storm:2, Cloudy:2, ColdSnap:2, HighWind:2, HeatWave:2 };
+
+  var INTRO = [
+    { t:"Pioneer Acres", b:"You have claimed a raw parcel on the frontier. Everything you need — water, food, shelter, power — you must build from the land itself." },
+    { t:"See, then choose", b:"The world shows you what matters. Click only what you care about; information opens when you ask. Systems unlock only once your farm has earned them." },
+    { t:"From survival to grid", b:"Survive first. Grow into a stable homestead. Then lift the whole valley with community infrastructure. Let's find your acre." }
+  ];
+
+  // build item catalog. sprite paths reference real PNGs in assets/pa.
+  function sp(cat,n){ return "assets/pa/"+cat+"/"+cat+"_"+(n<10?"0"+n:n)+".png"; }
+  var ITEMS = [
+    {id:"shelter",  name:"Shelter",      tool:"build",  src:sp("10_rural_buildings",1), m:5,  c:0, lesson:"Shelter blunts storm damage and keeps your people working."},
+    {id:"well",     name:"Well",         tool:"water",  src:sp("01_water_assets",1),   m:4,  c:0, lesson:"A well draws groundwater each day — the start of your water system."},
+    {id:"tank",     name:"Water Tank",   tool:"water",  src:sp("01_water_assets",2),   m:6,  c:0, lesson:"Tanks store water so drought and heat waves don't drain you dry."},
+    {id:"trough",   name:"Trough",       tool:"water",  src:sp("01_water_assets",3),   m:4,  c:0, lesson:"A trough delivers water to livestock — animals need it connected."},
+    {id:"pipe",     name:"Lay Pipe",     tool:"water",  src:sp("14_roads_utilities",3),m:5,  c:0, lesson:"Pipe connects your water so crops and troughs actually flow."},
+    {id:"crops",    name:"Plant Crops",  tool:"farm",   src:sp("05_props",1),          m:2,  c:0, lesson:"Crops produce food while watered. You need 8 plots for a stable table."},
+    {id:"compost",  name:"Compost",      tool:"farm",   src:sp("12_farm_systems",2),   m:4,  c:0, lesson:"Compost recycles waste into soil — closing the loop lifts yields."},
+    {id:"greenhouse",name:"Greenhouse",  tool:"farm",   src:sp("12_farm_systems",1),   m:15, c:10,lesson:"A powered greenhouse shrugs off cold snaps — your stability capstone."},
+    {id:"storage",  name:"Storage",      tool:"systems",src:sp("12_farm_systems",4),   m:8,  c:0, lesson:"Storage buffers surplus food and materials against bad days."},
+    {id:"barn",     name:"Barn",         tool:"systems",src:sp("10_rural_buildings",2),m:12, c:5, lesson:"A barn shelters livestock and adds storm resilience."},
+    {id:"solar",    name:"Solar Panel",  tool:"energy", src:sp("08_solar_energy",1),   m:8,  c:0, lesson:"Solar makes energy on clear days — less under cloud."},
+    {id:"wind",     name:"Wind Turbine", tool:"energy", src:sp("07_wind_energy",1),    m:10, c:0, lesson:"Wind covers cloudy days and surges in high wind."},
+    {id:"battery",  name:"Battery",      tool:"energy", src:sp("12_farm_systems",3),   m:8,  c:5, lesson:"A battery smooths energy so cloudy days don't black you out."},
+    {id:"wire",     name:"Wire Grid",    tool:"energy", src:sp("09_power_lines_connectors",2),m:6,c:0,lesson:"Wiring connects energy to your systems — powers the greenhouse."},
+    {id:"animals",  name:"Livestock",    tool:"people", src:sp("02_animals",1),        m:6,  c:8, lesson:"Animals give food but need connected trough water and compost."},
+    {id:"worker",   name:"Hire Worker",  tool:"people", src:sp("03_people",1),         m:0,  c:10,lesson:"A hired hand speeds the homestead — optional, but welcome."}
+  ];
+  var ITEM_BY_ID = {}; ITEMS.forEach(function(it){ ITEM_BY_ID[it.id]=it; });
+
+  var TOOLS = [
+    {id:"build",   ic:"🏚️", nm:"Build"},
+    {id:"water",   ic:"💧", nm:"Water"},
+    {id:"farm",    ic:"🌱", nm:"Farm"},
+    {id:"systems", ic:"📦", nm:"Systems"},
+    {id:"energy",  ic:"⚡", nm:"Energy"},
+    {id:"people",  ic:"🧑‍🌾", nm:"People"}
+  ];
+
+  // seven survey hotspots on the raw acre
+  var HOTSPOTS = [
+    {id:0, x:"24%", y:"34%", name:"Topsoil",   info:"Loamy and workable — good for crops once watered."},
+    {id:1, x:"50%", y:"30%", name:"Water Vein",info:"Shallow groundwater here. A well would reach it."},
+    {id:2, x:"76%", y:"34%", name:"Ridge",     info:"Catches wind and sun — ideal for energy later."},
+    {id:3, x:"20%", y:"66%", name:"Low Field", info:"Drains well. Room for troughs and livestock."},
+    {id:4, x:"50%", y:"60%", name:"Yard",      info:"Flat and central — your shelter belongs here."},
+    {id:5, x:"80%", y:"64%", name:"Stand",     info:"Scattered timber — raw materials to gather."},
+    {id:6, x:"50%", y:"80%", name:"South Slope",info:"Full sun. A greenhouse would thrive here."}
+  ];
+
+  var PROJECT_DEFS = [
+    {key:"well",    name:"Community Well",  need:{water:40, materials:20}},
+    {key:"battery", name:"Battery Hub",     need:{energy:40, materials:20}},
+    {key:"wind",    name:"Wind Farm",       need:{energy:50, materials:25}},
+    {key:"tower",   name:"Water Tower",     need:{water:50, materials:25}}
+  ];
+
+  var LEVEL_NAMES = ["Settler","Homesteader","Cultivator","Powered Farm","Stable Homestead","Pioneer Grid Builder"];
+
+  // ---------- state ----------
+  var state;
+  function reset(){
+    state = {
+      screen:"landing",
+      intro:0,
+      selected:null,
+      player:{x:50,y:60},
+      tool:"build",
+      day:1,
+      weather:"Clear",
+      resources:{ water:60, food:50, energy:40, materials:30, coins:20, community:0 },
+      survey:{},
+      built:{},            // id -> count placed
+      projects:{},         // key -> {well:{water:n,materials:n}}
+      discovered:[],
+      workStarted:false,
+      assets:[],           // placed farm sprites {id,src,x,y}
+      log:"Click the Work Land star to begin your survey."
+    };
+    PROJECT_DEFS.forEach(function(p){ state.projects[p.key] = { contrib:{}, done:false }; });
+    return state;
+  }
+  reset();
+
+  // ---------- helpers ----------
+  var DOC = (typeof document !== "undefined") ? document : null;
+  function $(id){ return DOC ? DOC.getElementById(id) : null; }
+  function clampR(k,v){
+    if(!isFinite(v)) v=0;
+    var max = MAXR[k];
+    if(max!==undefined){ if(v<0)v=0; if(v>max)v=max; }
+    else { if(v<0)v=0; }
+    return v;
+  }
+  function built(id){ return state.built[id] ? state.built[id] : 0; }
+  function waterConnected(){ return built("well")>0 && built("pipe")>0; }
+  function energyConnected(){ return (built("solar")>0 || built("wind")>0) && built("wire")>0; }
+  function surveyDone(){ return Object.keys(state.survey).length >= HOTSPOTS.length; }
+
+  // ---------- progression gates ----------
+  function canPlace(id){
+    var b = built;
+    switch(id){
+      case "shelter":    return surveyDone();
+      case "well":       return b("shelter")>0;
+      case "tank":       return b("well")>0;
+      case "trough":     return b("tank")>0;
+      case "pipe":       return b("trough")>0;
+      case "crops":      return waterConnected();
+      case "storage":    return b("crops")>=1;
+      case "compost":    return b("crops")>=1;
+      case "solar":      return b("storage")>0;
+      case "wind":       return b("storage")>0;
+      case "battery":    return b("solar")>0 || b("wind")>0;
+      case "wire":       return b("battery")>0;
+      case "animals":    return waterConnected() && b("trough")>0 && b("compost")>0;
+      case "barn":       return b("animals")>0;
+      case "greenhouse": return energyConnected() && b("compost")>0;
+      case "worker":     return b("shelter")>0;
+      default:           return false;
+    }
+  }
+
+  function stable(){
+    return built("shelter")>0 && built("well")>0 && built("tank")>0 && built("trough")>0 &&
+      built("pipe")>0 && built("crops")>=8 && built("storage")>0 &&
+      (built("solar")>0 || built("wind")>0) && built("battery")>0 && built("wire")>0 &&
+      built("compost")>0 && built("animals")>0 && built("greenhouse")>0;
+  }
+
+  function allProjectsDone(){
+    return PROJECT_DEFS.every(function(p){ return state.projects[p.key].done; });
+  }
+
+  function currentLevel(){
+    if(allProjectsDone()) return 6;
+    if(stable()) return 5;
+    if(energyConnected()) return 4;
+    if(built("crops")>=8 && built("storage")>0) return 3;
+    if(waterConnected()) return 2;
+    return 1;
+  }
+
+  // ---------- missions ----------
+  function missions(){
+    return [
+      { t:"Survey all 7 hotspots", done: surveyDone() },
+      { t:"Raise a Shelter", done: built("shelter")>0 },
+      { t:"Secure water (well → tank → trough → pipe)", done: waterConnected() && built("tank")>0 && built("trough")>0 },
+      { t:"Plant 8 crop plots ("+built("crops")+"/8)", done: built("crops")>=8 },
+      { t:"Build Storage", done: built("storage")>0 },
+      { t:"Connect energy (solar/wind → battery → wire)", done: energyConnected() },
+      { t:"Add Compost", done: built("compost")>0 },
+      { t:"Raise Livestock", done: built("animals")>0 },
+      { t:"Build a Greenhouse", done: built("greenhouse")>0 },
+      { t:"Reach Homestead Stability", done: stable() },
+      { t:"Complete all Community Projects", done: allProjectsDone() }
+    ];
+  }
+
+  // ---------- actions ----------
+  function spend(m, c){
+    if(state.resources.materials < m || state.resources.coins < c) return false;
+    state.resources.materials -= m;
+    state.resources.coins -= c;
+    return true;
+  }
+
+  function place(id){
+    var it = ITEM_BY_ID[id];
+    if(!it) return false;
+    if(!canPlace(id)) return false;
+    if(!spend(it.m, it.c)) return false;
+    state.built[id] = (state.built[id]||0) + 1;
+    // place a sprite on the board at a pseudo-random but stable spot
+    var n = state.assets.length;
+    var px = 14 + ((n*53) % 72);
+    var py = 28 + ((n*37) % 58);
+    state.assets.push({ id:id, src:it.src, x:px, y:py });
+    state.discovered.push(id);
+    state.log = "Built "+it.name+". "+it.lesson;
+    if(stable() && !state._stableAnnounced){ state._stableAnnounced=true; state.log="Homestead Stability reached! Community Projects unlocked."; }
+    return true;
+  }
+
+  function startWork(){
+    state.workStarted = true;
+    state.log = "Survey begun. Inspect each hotspot to learn the land, then build.";
+  }
+
+  function inspect(i){
+    state.survey[i] = true;
+    var h = HOTSPOTS[i];
+    state.log = h.name+": "+h.info;
+    return h;
+  }
+
+  function rollWeather(){
+    var bag = [];
+    WEATHERS.forEach(function(w){ var n=WEATHER_WEIGHT[w]||1; for(var k=0;k<n;k++) bag.push(w); });
+    return bag[Math.floor(Math.random()*bag.length)];
+  }
+
+  function endDay(){
+    state.day += 1;
+    var w = rollWeather();
+    state.weather = w;
+    var r = state.resources;
+
+    var dw=0, df=0, de=0, dm=0.5, dc=0;
+
+    // ---- production ----
+    if(built("well"))  dw += 6;
+    if(built("tank"))  dw += 3;
+    if(built("crops")>0 && r.water>0) df += Math.min(built("crops"),12) * 1.5;
+    if(built("animals")) df += 3;
+    if(built("solar"))  de += 10;
+    if(built("wind"))   de += 7;
+    if(built("battery"))de += 2;
+    if(built("compost"))df += 1.5;
+    dm += built("storage")*0.4 + built("worker")*0.6 + 0.5; // gathering
+
+    // ---- consumption ----
+    df -= 3;                               // people eat
+    if(built("animals")) { df -= 3; dw -= 3; }
+    dw -= Math.min(built("crops"),12) * 0.6;
+    de -= (built("storage")+built("greenhouse")+built("battery")) * 1.2;
+
+    // ---- weather modifiers (systems mitigate) ----
+    switch(w){
+      case "Drought":  dw -= 10; if(built("tank")) dw += 7; break;
+      case "Storm":    dm -= 4;  de -= 3; if(built("shelter")||built("barn")) dm += 4; break;
+      case "Cloudy":   de -= 8;  if(built("battery")) de += 4; if(built("wind")) de += 4; break;
+      case "ColdSnap": df -= 8;  if(built("greenhouse")) df += 8; break;
+      case "HighWind": if(built("wind")) de += 6; else de -= 4; if(!built("shelter")) dm -= 2; break;
+      case "HeatWave": dw -= 12; if(built("tank")) dw += 8; break;
+      default: break; // Clear
+    }
+
+    r.water     = clampR("water",     r.water + dw);
+    r.food      = clampR("food",      r.food + df);
+    r.energy    = clampR("energy",    r.energy + de);
+    r.materials = clampR("materials", r.materials + dm);
+    r.coins     = clampR("coins",     r.coins + dc + (r.food>70?1:0));
+    if(!isFinite(r.community) || r.community<0) r.community=0;
+
+    state.log = "Day "+state.day+" — "+weatherText(w)+" "+resSummary();
+    return w;
+  }
+  function weatherText(w){
+    var map={Clear:"Clear skies.",Drought:"Drought — water is scarce.",Storm:"Storm batters the acre.",
+      Cloudy:"Cloudy — solar lags.",ColdSnap:"Cold snap nips the crops.",HighWind:"High wind spins the turbines.",
+      HeatWave:"Heat wave bakes the fields."};
+    return map[w]||w;
+  }
+  function resSummary(){
+    var r=state.resources;
+    return "💧"+Math.round(r.water)+" 🌾"+Math.round(r.food)+" ⚡"+Math.round(r.energy)+" 🪵"+Math.round(r.materials);
+  }
+
+  // ---------- community ----------
+  function projectProgress(key){
+    var def=null; PROJECT_DEFS.forEach(function(p){ if(p.key===key) def=p; });
+    var got=state.projects[key].contrib, need=def.need, have=0, tot=0;
+    for(var k in need){ tot+=need[k]; have+=Math.min(need[k], got[k]||0); }
+    return tot? Math.round(have/tot*100) : 0;
+  }
+  function contribute(key){
+    var proj = state.projects[key];
+    if(proj.done) return false;
+    var def=null; PROJECT_DEFS.forEach(function(p){ if(p.key===key) def=p; });
+    var r=state.resources, moved=0;
+    var keep = { water:20, energy:20, materials:5 }; // keep a survival reserve
+    for(var res in def.need){
+      var remaining = def.need[res] - (proj.contrib[res]||0);
+      if(remaining<=0) continue;
+      var pool = (res==="materials") ? r.materials : r[res];
+      var avail = Math.max(0, pool - (keep[res]||0));
+      var give = Math.min(remaining, avail, 10);
+      if(give>0){
+        proj.contrib[res] = (proj.contrib[res]||0) + give;
+        r[res] = clampR(res, pool - give);
+        moved += give;
+      }
+    }
+    if(moved>0){
+      state.resources.community += moved;
+      if(projectProgress(key) >= 100){ proj.done = true; state.log = def.name+" complete!"; }
+      else { state.log = "Contributed to "+def.name+" ("+projectProgress(key)+"%)."; }
+      if(allProjectsDone()){ state.log = "All community projects complete — you are a Pioneer Grid Builder!"; }
+      return true;
+    }
+    state.log = "Not enough surplus for "+def.name+" yet. End more days to build reserves.";
+    return false;
+  }
+
+  // ---------- rendering (DOM, no-op under headless-without-DOM) ----------
+  function show(id){
+    state.screen=id;
+    if(!DOC) return;
+    var scr = DOC.querySelectorAll(".screen");
+    for(var i=0;i<scr.length;i++) scr[i].classList.toggle("active", scr[i].id===id);
+    if(id==="farm") updateAll();
+    if(id==="intro") renderIntro();
+  }
+
+  function renderIntro(){
+    if(!DOC) return;
+    var s=INTRO[state.intro];
+    $("introTitle").textContent=s.t;
+    $("introBody").textContent=s.b;
+    var dots=""; for(var i=0;i<INTRO.length;i++) dots+='<i class="'+(i===state.intro?"on":"")+'"></i>';
+    $("introDots").innerHTML=dots;
+    $("introNext").textContent = state.intro>=INTRO.length-1 ? "Enter the Frontier" : "Next";
+  }
+
+  function renderToolrail(){
+    var rail=$("toolrail"); if(!rail) return;
+    rail.innerHTML="";
+    TOOLS.forEach(function(t){
+      var b=DOC.createElement("button");
+      b.className="tool"+(state.tool===t.id?" sel":"");
+      b.innerHTML='<span class="ic">'+t.ic+'</span>'+t.nm;
+      b.onclick=function(){ selectTool(t.id); };
+      rail.appendChild(b);
+    });
+  }
+
+  function renderBuildMenu(){
+    var menu=$("buildmenu"), list=$("buildList"), title=$("buildTitle");
+    if(!menu) return;
+    if(!state.workStarted){ menu.classList.remove("open"); return; }
+    menu.classList.add("open");
+    var tool = TOOLS.filter(function(t){return t.id===state.tool;})[0];
+    title.textContent = (tool?tool.nm:"Build")+" options";
+    list.innerHTML="";
+    ITEMS.filter(function(it){return it.tool===state.tool;}).forEach(function(it){
+      var ok=canPlace(it.id);
+      var row=DOC.createElement("div");
+      row.className="item"+(ok?"":" locked");
+      var cost = it.m+"🪵"+(it.c?(" "+it.c+"🪙"):"");
+      var cnt = built(it.id)? " ×"+built(it.id) : "";
+      row.innerHTML='<img src="'+it.src+'" alt=""><div><div class="nm">'+it.name+cnt+
+        '</div><div class="co">'+cost+'</div></div>';
+      var btn=DOC.createElement("button");
+      btn.textContent = ok ? "Build" : "Locked";
+      btn.disabled = !ok;
+      btn.onclick=function(){ if(place(it.id)) updateAll(); else { state.log="Can't build "+it.name+" yet."; updateAll(); } };
+      row.appendChild(btn);
+      list.appendChild(row);
+    });
+  }
+
+  function renderHotspots(){
+    var board=$("board"); if(!board) return;
+    // clear hotspots & assets, rebuild
+    board.innerHTML="";
+    // assets
+    state.assets.forEach(function(a){
+      var img=DOC.createElement("img");
+      img.className="farm-asset"; img.src=a.src; img.alt="";
+      img.style.left=a.x+"%"; img.style.top=a.y+"%";
+      board.appendChild(img);
+    });
+    if(state.workStarted){
+      HOTSPOTS.forEach(function(h){
+        var d=DOC.createElement("div");
+        d.className="hot"+(state.survey[h.id]?" done":"");
+        d.style.left=h.x; d.style.top=h.y;
+        d.textContent = state.survey[h.id] ? "✓" : "?";
+        d.onclick=function(e){ inspect(h.id); showInspect(h, e); updateAll(); };
+        board.appendChild(d);
+      });
+    }
+  }
+
+  function showInspect(h, e){
+    var pop=$("inspect"); if(!pop) return;
+    $("inspTitle").textContent=h.name;
+    $("inspBody").textContent=h.info;
+    pop.classList.add("open");
+    var gx = (e&&e.clientX)||200, gy=(e&&e.clientY)||200;
+    pop.style.left=Math.min(gx, window.innerWidth-230)+"px";
+    pop.style.top=Math.min(gy, window.innerHeight-160)+"px";
+    setTimeout(function(){ pop.classList.remove("open"); }, 2600);
+  }
+
+  function renderMissions(){
+    var list=$("missionList"); if(!list) return;
+    list.innerHTML="";
+    missions().forEach(function(m){
+      var d=DOC.createElement("div");
+      d.className="mz"+(m.done?" done":"");
+      d.textContent=(m.done?"✓ ":"○ ")+m.t;
+      list.appendChild(d);
+    });
+  }
+
+  function renderHud(){
+    if(!$("hDay")) return;
+    var r=state.resources, lv=currentLevel();
+    $("hDay").textContent=state.day;
+    $("hWeather").textContent=state.weather;
+    $("hWater").textContent=Math.round(r.water);
+    $("hFood").textContent=Math.round(r.food);
+    $("hEnergy").textContent=Math.round(r.energy);
+    $("hMat").textContent=Math.round(r.materials);
+    $("hCoins").textContent=Math.round(r.coins);
+    $("hComm").textContent=Math.round(r.community);
+    $("hLevel").textContent=lv;
+    $("hLevelName").textContent=LEVEL_NAMES[lv-1];
+    $("hLevelName").textContent=LEVEL_NAMES[lv-1];
+    var star=$("workStar"); if(star) star.classList.toggle("hidden", state.workStarted);
+    var cbtn=$("communityBtn"); if(cbtn) cbtn.style.display = stable()? "inline-block":"none";
+    var logEl=$("logline"); if(logEl) logEl.innerHTML=state.log;
+  }
+
+  function renderProjects(){
+    var list=$("projList"); if(!list) return;
+    list.innerHTML="";
+    PROJECT_DEFS.forEach(function(p){
+      var proj=state.projects[p.key], pct=projectProgress(p.key);
+      var d=DOC.createElement("div");
+      d.className="proj"+(proj.done?" done":"");
+      var needTxt=[]; for(var k in p.need){ needTxt.push(p.need[k]+" "+k); }
+      d.innerHTML='<div class="top"><b>'+p.name+'</b><span>'+pct+'%</span></div>'+
+        '<div class="bar"><i style="width:'+pct+'%"></i></div>'+
+        '<div class="co" style="font-size:12px;color:#c9b88f">Needs: '+needTxt.join(", ")+'</div>';
+      var btn=DOC.createElement("button");
+      btn.textContent = proj.done ? "Complete ✓" : "Contribute";
+      btn.disabled = proj.done;
+      btn.onclick=function(){ contribute(p.key); updateAll(); };
+      d.appendChild(btn);
+      list.appendChild(d);
+    });
+  }
+
+  function updateAssets(){ renderHotspots(); }
+
+  function updateAll(){
+    if(!DOC) return;
+    renderToolrail();
+    renderBuildMenu();
+    updateAssets();
+    renderMissions();
+    renderHud();
+    renderProjects();
+  }
+
+  function selectTool(id){ state.tool=id; updateAll(); }
+
+  function openCommunity(){ if(!stable()) return; if(DOC){ $("modal").classList.add("open"); renderProjects(); } }
+  function closeCommunity(){ if(DOC) $("modal").classList.remove("open"); }
+
+  // ---------- wiring ----------
+  function bind(){
+    if(!DOC) return;
+    $("startHit").onclick=function(){ state.intro=0; show("intro"); };
+    $("introNext").onclick=function(){
+      if(state.intro>=INTRO.length-1){ show("map"); }
+      else { state.intro++; renderIntro(); }
+    };
+    $("introSkip").onclick=function(){ show("map"); };
+    var parcels=DOC.querySelectorAll(".parcel");
+    for(var i=0;i<parcels.length;i++){
+      (function(p){ p.onclick=function(){ state.selected=p.getAttribute("data-parcel"); show("farm"); }; })(parcels[i]);
+    }
+    $("workStar").onclick=function(){ startWork(); updateAll(); };
+    $("endDayBtn").onclick=function(){ endDay(); updateAll(); };
+    $("communityBtn").onclick=function(){ openCommunity(); };
+    $("closeModal").onclick=function(){ closeCommunity(); };
+    show("landing");
+    if(location && /[?&]autotest=1/.test(location.search)){
+      var res=runAutoTest();
+      var box=$("patest");
+      if(box){ box.className=res?"pass":"fail"; box.textContent=res?"AUTOTEST: PASS":"AUTOTEST: FAIL"; }
+    }
+  }
+
+  // ---------- automated test (walks full path to stability + community) ----------
+  function runAutoTest(){
+    var ok=true;
+    function assert(c){ if(!c) ok=false; return c; }
+    try{
+      reset();
+      // give a comfortable material/coin budget so the build chain isn't blocked by economy
+      state.resources.materials = 500; state.resources.coins = 300;
+      show && (state.screen="farm");
+
+      startWork();
+      for(var i=0;i<HOTSPOTS.length;i++) inspect(i);
+      assert(surveyDone());
+
+      // build chain in dependency order
+      assert(place("shelter"));
+      assert(place("well"));
+      assert(place("tank"));
+      assert(place("trough"));
+      assert(place("pipe"));
+      assert(waterConnected());
+      for(var c=0;c<8;c++) assert(place("crops"));
+      assert(built("crops")>=8);
+      assert(place("storage"));
+      assert(place("solar"));
+      assert(place("wind"));
+      assert(place("battery"));
+      assert(place("wire"));
+      assert(energyConnected());
+      assert(place("compost"));
+      assert(place("animals"));
+      assert(place("barn"));
+      assert(place("greenhouse"));
+      assert(stable());
+      assert(currentLevel()===5);
+
+      // simulate some days; resources must stay finite & non-negative
+      for(var d=0; d<40; d++){
+        endDay();
+        var r=state.resources;
+        assert(isFinite(r.water)&&r.water>=0&&r.water<=MAXR.water);
+        assert(isFinite(r.food)&&r.food>=0&&r.food<=MAXR.food);
+        assert(isFinite(r.energy)&&r.energy>=0&&r.energy<=MAXR.energy);
+        assert(isFinite(r.materials)&&r.materials>=0);
+        assert(isFinite(r.coins)&&r.coins>=0);
+      }
+
+      // community: build reserves then contribute until all four complete
+      var guard=0;
+      while(!allProjectsDone() && guard<400){
+        guard++;
+        // top up surplus so contributions can flow (simulates many productive days)
+        state.resources.water=100; state.resources.energy=100; state.resources.materials+=60;
+        PROJECT_DEFS.forEach(function(p){ contribute(p.key); });
+      }
+      assert(allProjectsDone());
+      assert(currentLevel()===6);
+    }catch(e){ ok=false; if(DOC&&DOC.body) DOC.body.dataset.testError=String(e&&e.message||e); }
+    if(DOC && DOC.body){ DOC.body.dataset.testResult = ok ? "pass" : "fail"; }
+    return ok;
+  }
+
+  // ---------- public API ----------
+  var api = {
+    reset:reset, show:show, startWork:startWork, inspect:inspect, place:place, canPlace:canPlace,
+    spend:spend, endDay:endDay, stable:stable, currentLevel:currentLevel, missions:missions,
+    openCommunity:openCommunity, contribute:contribute, projectProgress:projectProgress,
+    updateAll:updateAll, updateAssets:updateAssets, rollWeather:rollWeather, runAutoTest:runAutoTest,
+    ITEMS:ITEMS, HOTSPOTS:HOTSPOTS, PROJECT_DEFS:PROJECT_DEFS, WEATHERS:WEATHERS,
+    get state(){ return state; }
+  };
+
+  if(DOC){
+    if(DOC.readyState==="loading") DOC.addEventListener("DOMContentLoaded", bind);
+    else bind();
+  }
+  return api;
+})();
+if(typeof window!=="undefined") window.PioneerAcres = PioneerAcres;
+if(typeof module!=="undefined" && module.exports) module.exports = PioneerAcres;
+</script>
+</body>
+</html>
